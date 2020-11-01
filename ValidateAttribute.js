@@ -28,7 +28,7 @@ function ValidateAttribute(selector, options){
     elements: null
   };
 
-  this.dataSelector = {};
+  this.dataSelector = [];
   
   this.onBeforeValidate = null;
   this.onValidateFailure = null;
@@ -73,7 +73,8 @@ function ValidateAttribute(selector, options){
       MAX: 'VA_STR_MAX'
     },
     [ this.types.CHECKED ]: {
-      EMPTY: 'VA_CHECKED_EMPTY',
+      MIN: 'VA_CHECKED_MIN',
+      MAX: 'VA_CHECKED_MAX'
     }
   };
   
@@ -82,25 +83,26 @@ function ValidateAttribute(selector, options){
 
 ValidateAttribute.fn = ValidateAttribute.prototype;
 
-ValidateAttribute.fn.ruleEmpty = function(code){
+ValidateAttribute.fn.ruleEmpty = function(){
   var type = this.type();
   var vEmpty = this.isEmpty();
   var value = vEmpty !== 'false';
   var valid = vEmpty === null || value;
-  var message = this.attribute(this.attrs.EMPTYMSG);
 
   if (type === this.types.STRING){
     valid = valid || !!this.getValue().length
   }
 
-  return { validate: vEmpty !== null, value, code, message, valid };
+  return { 
+    value, valid, validate: vEmpty !== null, code: this.codes[type].EMPTY,
+    message: this.attribute(this.attrs.EMPTYMSG)
+  };
 };
 
-ValidateAttribute.fn.ruleMin = function(code){
+ValidateAttribute.fn.ruleMin = function(){
   var vMin = this.min();
-  var validate = vMin !==  null && vMin.match(/^\d+(\.\d+)?$/g);
+  var validate = vMin !==  null && !!vMin.match(/^\d+(\.\d+)?$/g);
   var value = validate ? +vMin : null;
-  var message = this.attribute(this.attrs.MINMSG);
   var valid = !validate || value === null;
   var type = this.type();
 
@@ -109,34 +111,79 @@ ValidateAttribute.fn.ruleMin = function(code){
   }
   else if (type === this.types.CHECKED){
     var name = this.name();
+    
     if (name.match(/\[\]$/g)){
-      
+      var elements = this.dataSelector
+      .map(function(selectors){
+        return selectors.name === name ? selectors.elements : null;
+      })
+      .filter(function(se){
+        return Array.isArray(se);
+      });
+console.log('ruleMin', elements)
+      var checked = elements[0].filter(function(element){
+        return element.checked;
+      });
+
+      valid = valid || checked.length >= value;
+    }
+    else{
+      value = 1;
+      validate = vMin === "" || +vMin > 0;
+      valid = !validate || this.element().checked;
     }
   }
 
-  return { validate, value, code, message, valid };
+  return { 
+    validate, value, valid, code: this.codes[type].MIN, 
+    message: this.attribute(this.attrs.MINMSG)
+  };
 };
 
-ValidateAttribute.fn.ruleMax = function(code){
+ValidateAttribute.fn.ruleMax = function(){
   var vMax = this.max();
-  var validate = vMax !==  null && vMax.match(/^\d+(\.\d+)?$/g);
+  var validate = vMax !==  null && !!vMax.match(/^\d+(\.\d+)?$/g);
   var value = validate ? +vMax : null;
-  var message = this.attribute(this.attrs.MAXMSG);
   var valid = !validate || value === null;
   var type = this.type();
 
   if (type === this.types.STRING) {
     valid = valid || this.getValue().length <= value;
   }
+  else if (type === this.types.CHECKED){
+    var name = this.name();
+    
+    if (name.match(/\[\]$/g)){
+      var elements = this.dataSelector
+      .map(function(selectors){
+        return selectors.name === name ? selectors.elements : null;
+      })
+      .filter(function(se){
+        return Array.isArray(se);
+      });
 
-  return { validate, value, code, message, valid };
+      var checked = elements[0].filter(function(element){
+        return element.checked;
+      });
+
+      valid = valid || checked.length <= value;
+    }
+    else{
+      value = 1;
+    }
+  }
+
+  return { 
+    validate, value, valid, code: this.codes[type].MAX,
+    message: this.attribute(this.attrs.MAXMSG)
+  };
 };
 
 ValidateAttribute.fn.rulesString = function(){
   return {
-    isEmpty: this.ruleEmpty(this.codes[this.types.STRING].EMPTY),
-    min: this.ruleMin(this.codes[this.types.STRING].MIN),
-    max: this.ruleMax(this.codes[this.types.STRING].MAX),
+    isEmpty: this.ruleEmpty(),
+    min: this.ruleMin(),
+    max: this.ruleMax(),
     // same
     // regex
     // in
@@ -152,9 +199,7 @@ ValidateAttribute.fn.Number = function ValidateNumber(validate, element){
 };
 
 ValidateAttribute.fn.rulesChecked = function(){
-  return {
-    isEmpty: this.ruleEmpty(this.codes[this.types.CHECKED].EMPTY)
-  };
+  return { min: this.ruleMin(), max: this.ruleMax() };
 }
 
 ValidateAttribute.fn.File = function ValidateFile(validate, element){
@@ -319,10 +364,10 @@ ValidateAttribute.fn.action = function(options){
     return name.length && _self.indexOf(name) === index;
   })
   .map(function(name){
-    name = name.replace(/\[/g, '\\[').replace(/\\]/g, '\\]');
-    var elementsName = action.selector.querySelectorAll('[' + vaName + '=' + name + ']');
+    var qName = name.replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+    var elementsName = action.selector.querySelectorAll('[' + vaName + '=' + qName + ']');
     action.elements.push({ name, elements : elementsName.length ? elementsName : 
-    action.selector.querySelectorAll('[name=' + name + ']') });
+    action.selector.querySelectorAll('[name=' + qName + ']') });
   });
 
   var self = this;
