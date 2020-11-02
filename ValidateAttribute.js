@@ -40,6 +40,7 @@ function ValidateAttribute(selector, options){
 
   this.types = {
     STRING: 'string',
+    EMAIL: 'email',
     NUMBER: 'number',
     INTEGER: 'integer',
     CHECKED: 'checked'
@@ -58,6 +59,8 @@ function ValidateAttribute(selector, options){
     MAX: 'max',
     MAXMSG: 'max-msg',
     VALUEAT: 'value-at',
+    REGEX: 'regex',
+    REGEXMSG: 'regex-msg'
   };
 
   this.values = {
@@ -70,7 +73,14 @@ function ValidateAttribute(selector, options){
     [ this.types.STRING ]: {
       EMPTY: 'VA_STR_EMPTY',
       MIN: 'VA_STR_MIN',
-      MAX: 'VA_STR_MAX'
+      MAX: 'VA_STR_MAX',
+      REGEX: 'VA_STR_REGEX'
+    },
+    [ this.types.EMAIL ]: {
+      EMPTY: 'VA_EMAIL_EMPTY',
+      MIN: 'VA_EMAIL_MIN',
+      MAX: 'VA_EMAIL_MAX',
+      REGEX: 'VA_EMAIL_REGEX'
     },
     [ this.types.CHECKED ]: {
       MIN: 'VA_CHECKED_MIN',
@@ -89,7 +99,7 @@ ValidateAttribute.fn.ruleEmpty = function(){
   var value = vEmpty !== 'false';
   var valid = vEmpty === null || value;
 
-  if (type === this.types.STRING){
+  if (type === this.types.STRING || type === this.types.EMAIL){
     valid = valid || !!this.getValue().length
   }
 
@@ -120,7 +130,7 @@ ValidateAttribute.fn.ruleMin = function(){
       .filter(function(se){
         return Array.isArray(se);
       });
-console.log('ruleMin', elements)
+
       var checked = elements[0].filter(function(element){
         return element.checked;
       });
@@ -179,15 +189,47 @@ ValidateAttribute.fn.ruleMax = function(){
   };
 };
 
+ValidateAttribute.fn.ruleRegex = function(){
+  var regex = this.regex();
+  var validate = regex !== null;
+  var type = this.type();
+  var self = this;
+
+  try{ var value = regex ? JSON.parse(regex): [] }catch(e){ value = [] }
+  
+  if (type === this.types.EMAIL){
+    value = [ "^[a-zA-Z\\d\\-_]+@([a-zA-Z\\d\\-_]+\\.){1,2}[a-zA-Z]{2,}$" ];
+  }
+  
+  var valid = !value.length || !!value.filter(function(reg){ 
+    console.log(type, reg, new RegExp(reg))
+    return self.getValue().match(new RegExp(reg)) 
+  }).length
+  
+  return { 
+    validate, value, valid, code: this.codes[type].REGEX, 
+    message: this.attribute(this.attrs.REGEXMSG) 
+  };
+};
+
 ValidateAttribute.fn.rulesString = function(){
   return {
     isEmpty: this.ruleEmpty(),
     min: this.ruleMin(),
     max: this.ruleMax(),
+    regex: this.ruleRegex()
     // same
-    // regex
     // in
     // not in
+  };
+};
+
+ValidateAttribute.fn.rulesEmail = function(){
+  return {
+    isEmpty: this.ruleEmpty(),
+    min: this.ruleMin(),
+    max: this.ruleMax(),
+    regex: this.ruleRegex()
   };
 };
 
@@ -275,6 +317,10 @@ ValidateAttribute.fn.max = function(){
   return this.attribute(this.attrs.MAX, ...arguments);
 };
 
+ValidateAttribute.fn.regex = function(){
+  return this.attribute(this.attrs.REGEX, ...arguments);
+};
+
 ValidateAttribute.fn.getValue = function(){
   var element = this.element();
   if (!element) return '';
@@ -329,6 +375,8 @@ ValidateAttribute.fn.validator = function(){
   switch(this.type()){
     case this.types.STRING:
       return this.rulesString();
+    case this.types.EMAIL:
+      return this.rulesEmail();
     case this.types.NUMBER:
       return new this.Number(this, element);
     case this.types.INTEGER:
@@ -415,8 +463,8 @@ ValidateAttribute.fn.action = function(options){
   });
 
   console.log(this);
-  if (errors.length && elementValid){
-    this.onValidateFailure && this.onValidateFailure(action.selector, errors);
+  if (errors.length){
+    elementValid && this.onValidateFailure && this.onValidateFailure(action.selector, errors);
     return -1;
   }
 
@@ -453,17 +501,18 @@ ValidateAttribute.fn.getData = function(){
 
 ValidateAttribute.fn.formData = function(){
   var form = new FormData;
-  var data = this.dataSelector;
 
-  Object.keys(data).map(function(name){
-    if (Array.isArray(data[name]) || data[name] instanceof FileList){
-      Array.from(data[name]).map(function(key){
-        form.append(name + '[]', data[name][key]);
-      });
-    }
-    else{
-      form.append(name, data[name]);
-    }
+  this.dataSelector.map(function(selectors){
+    selectors.elements.map(function(element){
+      if (Array.isArray(element.value) || element.value instanceof FileList){
+        Array.from(element.value).map(function(value){
+          form.append(selectors.name, value);
+        });
+      }
+      else{
+        form.append(selectors.name, element.value);
+      }
+    });
   });
 
   form.processData = false;
@@ -504,17 +553,8 @@ console.log('ajax :: params ::', params);
   };
 
   xhr.open(params.method, params.url, true);
-  xhr.setRequestHeader('Content-Type', params.enctype);
-
   xhr.send(params.data);
   
-  xhr.onload = function(){
-    if (this.readyState === 1){
-      console.log('here');
-    }
-    
-  }
-
   return this;
 };
 
