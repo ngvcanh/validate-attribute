@@ -248,15 +248,15 @@ ValidateAttribute.fn.ruleRegex = function(){
 };
 
 ValidateAttribute.fn.rulesString = function(){
-  return {
-    isEmpty: this.ruleEmpty(),
-    min: this.ruleMin(),
-    max: this.ruleMax(),
-    regex: this.ruleRegex()
+  return [
+    this.ruleEmpty(),
+    this.ruleMin(),
+    this.ruleMax(),
+    this.ruleRegex()
     // same
     // in
     // not in
-  };
+  ];
 };
 
 ValidateAttribute.fn.rulesEmail = function(){
