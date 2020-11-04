@@ -551,7 +551,7 @@ ValidateAttribute.fn.getValue = function(){
       var el = document.querySelectorAll(elSelector);
       if (!el.length) return '';
 
-      if (name.match(/\[\]$/g)){
+      if (isMulti){
         var result = [];
         
         Array.from(el).map(function(e){
