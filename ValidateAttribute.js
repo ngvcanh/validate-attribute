@@ -74,12 +74,14 @@ function ValidateAttribute(selector, options){
     RMIN: 'rmin',
     RMINMSG: 'rmin-msg',
     RMAX: 'rmax',
-    RMAXMSG: 'rmax-msg'
+    RMAXMSG: 'rmax-msg',
+    ELEMENT: 'element'
   };
 
   this.values = {
     HTML: 'html',
     TEXT: 'text',
+    MAPELEMENT: 'map-element',
     VALUE: 'value'
   };
 
@@ -93,13 +95,34 @@ function ValidateAttribute(selector, options){
     NOTIN: 'VA_NOT_IN',
     SAME: 'VA_SAME',
     RMIN: 'VA_RATHER_MIN',
-    RMAX: 'VA_RATHER_MAX'
+    RMAX: 'VA_RATHER_MAX',
+    TYPE: 'VA_TYPE'
   };
   
   return this;
 }
 
 ValidateAttribute.fn = ValidateAttribute.prototype;
+
+ValidateAttribute.fn.isEmpty = function(obj){
+  switch(typeof obj){
+    case 'string': return !obj.length;
+    case 'bigint':
+    case 'number': return obj === 0;
+    case 'function':
+    case 'undefined': return true;
+    case 'boolean': return !obj;
+  }
+
+  if (Array.isArray(obj)) return !obj.length;
+  if (obj === null) return true;
+
+  for (var _name in obj){
+    return false;
+  }
+
+  return true;
+};
 
 ValidateAttribute.fn.ruleEmpty = function(){
   var value = this.empty();
@@ -499,9 +522,20 @@ ValidateAttribute.fn.ratherMin = function(){
   return this.attribute(this.attrs.RMIN, ...arguments);
 }
 
+ValidateAttribute.fn.attrElement = function(){
+  return this.attribute(this.attrs.ELEMENT, ...arguments);
+};
+
 ValidateAttribute.fn.getValue = function(){
   var element = this.element();
   if (!element) return '';
+
+  var name = this.name();
+  var isMulti = !!name.match(/\[\]$/g);
+
+  if ('file' === element.type){
+    return isMulti ? element.files : element.files[0];
+  }
 
   var valueAt = this.getValueAt();
   
@@ -510,6 +544,31 @@ ValidateAttribute.fn.getValue = function(){
       return 'innerText' in element ? element.innerText : '';
     case this.values.HTML:
       return 'innerHTML' in element ? element.innerHTML : '';
+    case this.values.MAPELEMENT:
+      var elSelector = this.attrElement();
+      if (!elSelector) return '';
+
+      var el = document.querySelectorAll(elSelector);
+      if (!el.length) return '';
+
+      if (name.match(/\[\]$/g)){
+        var result = [];
+        
+        Array.from(el).map(function(e){
+          e.type === 'file' ? 
+          Array.from(e.files).map(function(f){
+            result.push(f);
+          }) : 
+          result.push('value' in e ? e.value : e.innerHTML);
+        });
+
+        return result;
+      }
+      else{
+        el = el[0];
+        return 'file' === el.type ? el.files[0] : 
+        'value' in el ? el.value : el.innerHTML;
+      }
     default:
       return 'value' in element ? element.value : '';
   }
@@ -676,8 +735,8 @@ ValidateAttribute.fn.formData = function(){
   var form = new FormData;
   var self = this;
 
-  this.dataSelector.map(function(selectors){
-    selectors.elements.map(function(elementInfo){
+  this.isEmpty(this.dataSelector) || this.dataSelector.map(function(selectors){
+    self.isEmpty(selectors.elements) || selectors.elements.map(function(elementInfo){
       var send = elementInfo.element.getAttribute(self.options.prefix + '-' + self.attrs.SEND);
       var type = elementInfo.element;
 
@@ -687,7 +746,7 @@ ValidateAttribute.fn.formData = function(){
       ) return;
 
       if (Array.isArray(elementInfo.value) || elementInfo.value instanceof FileList){
-        Array.from(elementInfo.value).map(function(value){
+        self.isEmpty(elementInfo.value) || Array.from(elementInfo.value).map(function(value){
           form.append(selectors.name, value);
         });
       }
@@ -741,7 +800,7 @@ console.log('ajax :: params ::', params);
 };
 
 ValidateAttribute.fn.addEventListener = function(eventName, handler){
-  if (!this.querySelector || !this.querySelector.length) return this;
+  if (this.isEmpty(this.querySelector)) return this;
 
   Array.from(this.querySelector).map(function(selector){
     if (window.attachEvent){
@@ -759,7 +818,7 @@ ValidateAttribute.fn.addEventListener = function(eventName, handler){
 };
 
 ValidateAttribute.fn.listen = function(options){
-  if (!this.querySelector || !this.querySelector.length) return this;
+  if (this.isEmpty(this.querySelector)) return this;
   Object.assign(this.options, options);
 
   var self = this.addEventListener('submit', function(event){
