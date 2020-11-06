@@ -44,7 +44,8 @@ function ValidateAttribute(selector, options){
     NUMBER: 'number',
     INTEGER: 'integer',
     CHECKED: 'checked',
-    MCHECKED: 'mchecked'
+    MCHECKED: 'mchecked',
+    FILE: 'file'
   };
 
   this.attrs = {
@@ -75,13 +76,26 @@ function ValidateAttribute(selector, options){
     RMINMSG: 'rmin-msg',
     RMAX: 'rmax',
     RMAXMSG: 'rmax-msg',
-    ELEMENT: 'element'
+    ELEMENT: 'element',
+    MINSIZE: 'min-size',
+    MINSIZEMSG: 'min-size-msg',
+    MAXSIZE: 'max-size',
+    MAXSIZEMSG: 'max-size-msg',
+    RMINSIZE: 'rmin-size',
+    RMINSIZEMSG: 'rmin-size-msg',
+    RMAXSIZE: 'rmax-size',
+    RMAXSIZEMSG: 'rmax-size-msg',
+    MIMES: 'mimes',
+    MIMESMSG: 'mimes-msg',
+    EXTS: 'exts',
+    EXTSMSG: 'exts-msg'
   };
 
   this.values = {
     HTML: 'html',
     TEXT: 'text',
     MAPELEMENT: 'map-element',
+    FILE: 'file',
     VALUE: 'value'
   };
 
@@ -130,7 +144,9 @@ ValidateAttribute.fn.ruleEmpty = function(){
   var validate = value === 'false';
 
   value = !validate;
-  var valid = !validate || value || !!this.getValue().length;
+
+  var valueElement = this.getValue();
+  var valid = (!validate || value) || !!valueElement && (valueElement instanceof File || valueElement.length);
 
   return { 
     validate, value, valid, type: this.type(), code: this.codes.EMPTY,
@@ -144,14 +160,23 @@ ValidateAttribute.fn.ruleMin = function(){
   var value = validate ? +vMin : null;
   var valid = !validate || value === null;
   var type = this.type();
+  var valueElement = this.getValue();
 
   type === this.types.INTEGER && (type = this.types.NUMBER);
-  
-  if (type === this.types.STRING) {
-    valid = valid || this.getValue().length >= value;
+
+  if (type === this.types.STRING){
+    valid = valid || valueElement.length >= value;
   }
   else if (type === this.types.NUMBER){
-    valid = valid || +this.getValue() >= value;
+    valid = valid || +valueElement >= value;
+  }
+  else if (type === this.types.FILE){
+    if (valueElement instanceof FileList){
+      valid = valid || valueElement.length >= value;
+    }
+    else if (valueElement instanceof File){
+      valid = valid || value <= 1;
+    }
   }
   else if (type === this.types.CHECKED){
     var name = this.name();
@@ -190,14 +215,23 @@ ValidateAttribute.fn.ruleRatherMin = function(){
   var value = validate ? +vMin : null;
   var valid = !validate || value === null;
   var type = this.type();
+  var valueElement = this.getValue();
 
   type === this.types.INTEGER && (type = this.types.NUMBER);
   
-  if (type === this.types.STRING) {
-    valid = valid || this.getValue().length > value;
+  if (type === this.types.STRING){
+    valid = valid || valueElement.length > value;
   }
   else if (type === this.types.NUMBER){
-    valid = valid || +this.getValue() > value;
+    valid = valid || +valueElement > value;
+  }
+  else if (type === this.types.FILE){
+    if (valueElement instanceof FileList){
+      valid = valid || valueElement.length > value;
+    }
+    else if (valueElement instanceof File){
+      valid = valid || value < 1;
+    }
   }
   else if (type === this.types.CHECKED){
     var name = this.name();
@@ -236,14 +270,23 @@ ValidateAttribute.fn.ruleMax = function(){
   var value = validate ? +vMax : null;
   var valid = !validate || value === null;
   var type = this.type();
+  var valueElement = this.getValue();
 
   type === this.types.INTEGER && (type = this.types.NUMBER);
 
-  if (type === this.types.STRING) {
-    valid = valid || this.getValue().length <= value;
+  if (type === this.types.STRING){
+    valid = valid || valueElement.length <= value;
   }
   else if (type === this.types.NUMBER){
-    valid = valid || +this.getValue() <= value;
+    valid = valid || +valueElement <= value;
+  }
+  else if (type === this.types.FILE){
+    if (valueElement instanceof FileList){
+      valid = valid || valueElement.length >= value;
+    }
+    else if (valueElement instanceof File){
+      valid = valid || value <= 1;
+    }
   }
   else if (type === this.types.CHECKED){
     var name = this.name();
@@ -280,14 +323,23 @@ ValidateAttribute.fn.ruleRatherMax = function(){
   var value = validate ? +vMax : null;
   var valid = !validate || value === null;
   var type = this.type();
+  var valueElement = this.getValue();
 
   type === this.types.INTEGER && (type = this.types.NUMBER);
 
-  if (type === this.types.STRING) {
-    valid = valid || this.getValue().length < value;
+  if (type === this.types.STRING){
+    valid = valid || valueElement.length < value;
   }
   else if (type === this.types.NUMBER){
-    valid = valid || +this.getValue() < value;
+    valid = valid || +valueElement < value;
+  }
+  else if (type === this.types.FILE){
+    if (valueElement instanceof FileList){
+      valid = valid || valueElement.length >= value;
+    }
+    else if (valueElement instanceof File){
+      valid = valid || value <= 1;
+    }
   }
   else if (type === this.types.CHECKED){
     var name = this.name();
@@ -432,7 +484,10 @@ ValidateAttribute.fn.getRules = function(){
     this.ruleIn(),
     this.ruleNotIn(),
     this.ruleSame()
-  ];
+  ]
+  .concat(this.type() === this.types.FILE ? [
+
+  ] : []);
 };
 
 ValidateAttribute.fn.element = function(){
@@ -545,6 +600,8 @@ ValidateAttribute.fn.getValue = function(){
       return 'innerText' in element ? element.innerText : '';
     case this.values.HTML:
       return 'innerHTML' in element ? element.innerHTML : '';
+    case this.values.FILE:
+      return 'files' in element ? element.files : new FileList;
     case this.values.MAPELEMENT:
       var elSelector = this.attrElement();console.log(elSelector);
       if (!elSelector) return '';
@@ -707,7 +764,10 @@ ValidateAttribute.fn.action = function(options){
   }
 
   var data = this.getData();
-  if (this.onBeforeSend && this.onBeforeSend(action.selector, data) === false) return 1;
+  
+  if (this.onBeforeSend && this.onBeforeSend(action.selector, data) === false){
+    return this.options.removeSubmit === true  ? 0 : 1;
+  }
 
   this.ajax({
     url: this.getUrl(),
