@@ -96,7 +96,8 @@ function ValidateAttribute(selector, options){
     SAME: 'VA_SAME',
     RMIN: 'VA_RATHER_MIN',
     RMAX: 'VA_RATHER_MAX',
-    TYPE: 'VA_TYPE'
+    TYPE: 'VA_TYPE',
+    REGEX: 'VA_REGEX'
   };
   
   return this;
@@ -527,7 +528,7 @@ ValidateAttribute.fn.attrElement = function(){
 };
 
 ValidateAttribute.fn.getValue = function(){
-  var element = this.element();
+  var element = this.element();console.log(element);
   if (!element) return '';
 
   var name = this.name();
@@ -538,17 +539,17 @@ ValidateAttribute.fn.getValue = function(){
   }
 
   var valueAt = this.getValueAt();
-  
+
   switch(valueAt){
     case this.values.TEXT:
       return 'innerText' in element ? element.innerText : '';
     case this.values.HTML:
       return 'innerHTML' in element ? element.innerHTML : '';
     case this.values.MAPELEMENT:
-      var elSelector = this.attrElement();
+      var elSelector = this.attrElement();console.log(elSelector);
       if (!elSelector) return '';
 
-      var el = document.querySelectorAll(elSelector);
+      var el = this.actionSelector.selector.querySelectorAll(elSelector);console.log(el);
       if (!el.length) return '';
 
       if (isMulti){
@@ -739,7 +740,7 @@ ValidateAttribute.fn.formData = function(){
     self.isEmpty(selectors.elements) || selectors.elements.map(function(elementInfo){
       var send = elementInfo.element.getAttribute(self.options.prefix + '-' + self.attrs.SEND);
       var type = elementInfo.element;
-
+console.log('formData')
       if (
         send === 'false' ||
         ((type === 'checkbox' || type === 'radio') && !elementInfo.element.checked)
